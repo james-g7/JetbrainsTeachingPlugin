@@ -1,60 +1,57 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <id>com.github.jamesg7.hacktheburghxiii</id>
-    <name>hacktheburghxiii</name>
-    <vendor>james-g7</vendor>
+    <name>HTBXIII Learning Agent Tools</name>
+    <vendor url="https://github.com/james-g7/hacktheburghxiii">James Gaskin and Noah Barret</vendor>
     <description><![CDATA[
-        <p><b>hacktheburghxiii</b> is a repository that provides a pure template to make it easier to create a new plugin project.</p>
-        <p>The main goal of this template is to speed up the setup phase of plugin development for both new and experienced developers by preconfiguring the project scaffold and CI, linking to the proper documentation pages, and keeping everything organized.</p>
+        <p>Lets an AI learning agent teach inside the editor. Instead of writing code for you, the agent
+        explains the code you already have, right where it is.</p>
+        <ul>
+            <li><b>Highlights code</b>: a line, a block of lines, or an exact column range, in any file of the project.</li>
+            <li><b>Explains above the code</b>: each highlight gets an explanation box rendered in the editor directly above it.</li>
+            <li><b>Linked explanation trees</b>: explanations link to deeper explanations and to other ranges of code,
+                so the learner chooses how deep to go. Missing explanations are generated on demand.</li>
+            <li><b>Step-by-step walkthroughs</b>: plays back the execution of a function line by line, showing
+                variable values, the call stack and program output.</li>
+        </ul>
+        <p>Explanations and walkthroughs are described as JSON, so any agent can drive the plugin. Try it by hand
+        from the <b>Tools</b> menu.</p>
+        <p>Made for HackTheBurgh XIII (2026), JetBrains "Help the Developer" challenge.</p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
 
-    <resource-bundle>messages.MyBundle</resource-bundle>
-
-    <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.jamesg7.hacktheburghxiii.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
-        <postStartupActivity implementation="com.github.jamesg7.hacktheburghxiii.startup.MyProjectActivity" />
-    </extensions>
-
     <actions>
-        <action id="myplugin.Highlight"
-                class="actions.HighlightAction"
-                text="Highlight"
-                description="Highlight a range of code">
+        <group id="HtbLearning.ToolsGroup" text="Learning Agent" popup="true">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
-        </action>
-        <action id="myplugin.ExplainHighlight"
-                class="actions.ExplainHighlightAction"
-                text="Highlight with Explanation"
-                description="Highlight a range of code and show an explanation above it">
-            <add-to-group group-id="ToolsMenu" anchor="last"/>
-        </action>
-        <action id="myplugin.ShowExplanation"
-                class="actions.ShowExplanationAction"
-                text="Show Explanation Tree"
-                description="Load an explanation tree from JSON and show its root">
-            <add-to-group group-id="ToolsMenu" anchor="last"/>
-        </action>
-        <action id="myplugin.ClearExplanations"
-                class="actions.ClearExplanationsAction"
-                text="Clear Explanations"
-                description="Remove all explanation highlights and boxes">
-            <add-to-group group-id="ToolsMenu" anchor="last"/>
-        </action>
-        <action id="myplugin.WalkThroughFunction"
-                class="actions.WalkThroughFunctionAction"
-                text="Walk Through Function…"
-                description="Ask the AI for a step-by-step walkthrough of the function at the caret">
-            <add-to-group group-id="ToolsMenu" anchor="last"/>
-            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
-        </action>
-        <action id="myplugin.ShowWalkthrough"
-                class="actions.ShowWalkthroughAction"
-                text="Show Walkthrough"
-                description="Play a walkthrough from a JSON file">
-            <add-to-group group-id="ToolsMenu" anchor="last"/>
-        </action>
+            <action id="HtbLearning.ShowExplanation"
+                    class="com.github.jamesg7.hacktheburghxiii.actions.ShowExplanationAction"
+                    text="Show Explanation Tree…"
+                    description="Load an explanation tree from JSON and show its root"/>
+            <action id="HtbLearning.ExplainHighlight"
+                    class="com.github.jamesg7.hacktheburghxiii.actions.ExplainHighlightAction"
+                    text="Highlight with Explanation…"
+                    description="Highlight a range of code and show an explanation above it"/>
+            <action id="HtbLearning.Highlight"
+                    class="com.github.jamesg7.hacktheburghxiii.actions.HighlightAction"
+                    text="Highlight…"
+                    description="Highlight a range of code"/>
+            <action id="HtbLearning.ClearExplanations"
+                    class="com.github.jamesg7.hacktheburghxiii.actions.ClearExplanationsAction"
+                    text="Clear Explanations"
+                    description="Remove all explanation highlights and boxes"/>
+            <separator/>
+            <action id="HtbLearning.WalkThroughFunction"
+                    class="com.github.jamesg7.hacktheburghxiii.actions.WalkThroughFunctionAction"
+                    text="Walk Through Function…"
+                    description="Ask the AI for a step-by-step walkthrough of the function at the caret">
+                <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            </action>
+            <action id="HtbLearning.ShowWalkthrough"
+                    class="com.github.jamesg7.hacktheburghxiii.actions.ShowWalkthroughAction"
+                    text="Show Walkthrough…"
+                    description="Play a walkthrough from a JSON file"/>
+        </group>
     </actions>
 
 </idea-plugin>

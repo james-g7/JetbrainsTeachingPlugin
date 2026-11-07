@@ -13,9 +13,9 @@ At each step the editor shows:
 - optionally, variables in the code replaced by their values, e.g. `"i = " + i` shown as
   `"i = " + 1`. The file isn't changed.
 
-**Tools → Walk Through Function…** (also on the editor's right-click menu) asks for the function,
+**Tools → Learning Agent → Walk Through Function…** (also on the editor's right-click menu) asks for the function,
 the inputs and a level (beginner, intermediate or advanced), then asks the registered AI provider for
-a walkthrough. **Tools → Show Walkthrough** plays a JSON file.
+a walkthrough. **Tools → Learning Agent → Show Walkthrough** plays a JSON file.
 
 ## JSON format
 
@@ -97,4 +97,4 @@ ends a walkthrough.
 ## Example
 
 `docs/examples/main_walkthrough.json` walks through the test project's `Main.java`. Play it with
-**Tools → Show Walkthrough** and its absolute path.
+**Tools → Learning Agent → Show Walkthrough** and its absolute path.

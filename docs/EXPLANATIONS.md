@@ -120,5 +120,5 @@ so a model can reply with e.g. `{"range": "11", "text": "..."}`.
 Invalid JSON throws `IllegalArgumentException`. The message names the node and the field at
 fault, so it can be passed back to the agent to fix.
 
-From the IDE: **Tools → Show Explanation Tree** loads a JSON file. **Tools → Clear Explanations**
+From the IDE: **Tools → Learning Agent → Show Explanation Tree** loads a JSON file. **Tools → Learning Agent → Clear Explanations**
 removes everything shown.

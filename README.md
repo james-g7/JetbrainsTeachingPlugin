@@ -45,7 +45,8 @@ id:
 
 Here `#concat` is not defined, so clicking it asks Air to generate it.
 
-From Java/Kotlin, the agent talks to the project's `ExplanationStore`:
+From Java/Kotlin, the agent talks to the project's `ExplanationStore`
+(package `com.github.jamesg7.hacktheburghxiii.explain`):
 
 ```java
 ExplanationStore store = ExplanationStore.getInstance(project);
@@ -63,13 +64,16 @@ There is an example tree in [docs/examples/test_java.json](docs/examples/test_ja
 
 ## Trying it in the IDE
 
-The plugin adds three actions under **Tools**:
+The plugin adds a **Tools → Learning Agent** menu:
 
 | Action | What it does |
 |---|---|
-| **Show Explanation Tree** | Loads an explanation JSON file (default `.explanations/explanation.json`) and shows its root. |
-| **Highlight with Explanation** | Prompts for a file and range, then for explanation text, and shows it above the highlight. |
-| **Highlight** | Prompts for a file and range and highlights it. |
+| **Show Explanation Tree…** | Loads an explanation JSON file (default `.explanations/explanation.json`) and shows its root. |
+| **Highlight with Explanation…** | Prompts for a file and range, then for explanation text, and shows it above the highlight. |
+| **Highlight…** | Prompts for a file and range and highlights it. |
+| **Clear Explanations** | Removes every explanation highlight and box. |
+| **Walk Through Function…** | Asks the connected AI for a step-by-step walkthrough of the function at the caret (also in the editor's right-click menu). |
+| **Show Walkthrough…** | Plays a walkthrough JSON file. See [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md). |
 
 These let you try the plugin by hand. In normal use, Air drives the plugin through the API above.
 
@@ -93,12 +97,23 @@ To install the zip you built, go to <kbd>Settings</kbd> > <kbd>Plugins</kbd> > <
 ## Project layout
 
 ```
-src/main/java/
-  explain/   ExplanationStore, ExplanationNode, ExplanationProvider, ExplanationRequest, CodeRange
-  actions/   The Tools menu actions
-  util/      HighlightUtil: editor highlights, explanation boxes and link handling
-docs/        Explanation format and examples
+src/main/java/com/github/jamesg7/hacktheburghxiii/
+  explain/      ExplanationStore, ExplanationNode, ExplanationProvider, JSON parsing, styling
+  walkthrough/  WalkthroughService, Walkthrough, WalkthroughProvider and the step box UI
+  actions/      The Tools → Learning Agent actions
+  util/         HighlightUtil and ExplanationBox: editor highlights, boxes and link handling
+docs/           Explanation and walkthrough formats, with examples
 ```
+
+## Releasing
+
+1. Move the `[Unreleased]` notes in `CHANGELOG.md` into shape and bump `version` in `gradle.properties`.
+2. Push to `main`. The **Build** workflow builds, tests and verifies the plugin and creates a draft
+   GitHub release.
+3. Publish the draft. The **Release** workflow signs the plugin, publishes it to JetBrains Marketplace
+   and opens a PR with the patched changelog. It needs the `PUBLISH_TOKEN`, `CERTIFICATE_CHAIN`,
+   `PRIVATE_KEY` and `PRIVATE_KEY_PASSWORD` repository secrets
+   ([plugin signing](https://plugins.jetbrains.com/docs/intellij/plugin-signing.html)).
 
 ## Authors
 
