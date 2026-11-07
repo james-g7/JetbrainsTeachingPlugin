@@ -11,8 +11,12 @@ dependencies {
 
     // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html
     intellijPlatform {
-        intellijIdea("2026.2.3")
+        intellijIdea(providers.gradleProperty("platformVersion"))
         testFramework(TestFrameworkType.Platform)
         testBundledPlugins("com.intellij.modules.ultimate")
     }
+}
+
+kotlin {
+    jvmToolchain(21)
 }
