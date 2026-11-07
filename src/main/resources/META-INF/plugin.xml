@@ -16,4 +16,14 @@
         <toolWindow factoryClass="com.github.jamesg7.hacktheburghxiii.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
         <postStartupActivity implementation="com.github.jamesg7.hacktheburghxiii.startup.MyProjectActivity" />
     </extensions>
+
+    <actions>
+        <action id="myplugin.Highlight"
+                class="actions.HighlightAction"
+                text="Highlight"
+                description="Highlight a range of code">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+    </actions>
+
 </idea-plugin>
