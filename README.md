@@ -1,45 +1,111 @@
-# hacktheburghxiii
+# htbxiii learning agent tools
 
 ![Build](https://github.com/james-g7/hacktheburghxiii/workflows/Build/badge.svg)
-[![Version](https://img.shields.io/jetbrains/plugin/v/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
-[![Downloads](https://img.shields.io/jetbrains/plugin/d/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
 
-## Template ToDo list
-- [x] Create a new [IntelliJ Platform Plugin Template][template] project.
-- [ ] Get familiar with the [template documentation][template].
-- [ ] Adjust the [group](./gradle.properties), as well as the [id](./src/main/resources/META-INF/plugin.xml), [name](./src/main/resources/META-INF/plugin.xml), and [sources package](./src/main/kotlin).
-- [ ] Adjust the plugin [description](./src/main/resources/META-INF/plugin.xml) (see [Tips][docs:plugin-description]) and this README to describe what your plugin does.
-- [ ] Review the [Legal Agreements](https://plugins.jetbrains.com/docs/marketplace/legal-agreements.html?from=IJPluginTemplate).
-- [ ] [Publish a plugin manually](https://plugins.jetbrains.com/docs/intellij/publishing-plugin.html?from=IJPluginTemplate) for the first time.
-- [ ] Set the `MARKETPLACE_ID` in the above README badges. You can obtain it once the plugin is published to JetBrains Marketplace.
-- [ ] Set the [Plugin Signing](https://plugins.jetbrains.com/docs/intellij/plugin-signing.html?from=IJPluginTemplate) related [secrets](https://github.com/JetBrains/intellij-platform-plugin-template#environment-variables).
-- [ ] Set the [Deployment Token](https://plugins.jetbrains.com/docs/marketplace/plugin-upload.html?from=IJPluginTemplate).
-- [ ] Click the <kbd>Watch</kbd> button on the top of the [IntelliJ Platform Plugin Template][template] to be notified about releases containing new features and fixes.
+A JetBrains IDE plugin that lets **Air**, an AI learning agent, teach inside the editor.
 
-This Fancy IntelliJ Platform Plugin is going to be your implementation of the brilliant ideas that you have.
+Air is being built alongside this plugin. Its only job is to teach: it explains code so the
+developer understands it, and does not write the code for them. This plugin is how Air shows those
+explanations. It highlights code in the editor, puts an explanation box directly above the
+highlight, and lets the learner click through linked explanations to go deeper, one concept at a
+time.
 
-## Installation
+Built by [James Gaskin](https://github.com/james-g7) and [Noah Barret](https://github.com/NoahB-07)
+for the **JetBrains "Help the Developer" challenge** at **HackTheBurgh XIII (2026)**.
 
-- Using the IDE built-in plugin system:
+## What it does
 
-  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>Marketplace</kbd> > <kbd>Search for "hacktheburghxiii"</kbd> >
-  <kbd>Install</kbd>
+- **Highlights code**: a single line, a block of lines, or an exact column range, in any file in
+  the project.
+- **Explains above the code**: each highlight gets an explanation box rendered in the editor right
+  above it.
+- **Linked explanation trees**: explanation text can link to other explanations
+  (`[label](#id)`) or to bare ranges of code (`[label](12-15)`), including in other files. The
+  learner follows the links that interest them, so they choose how deep to go.
+- **Generated on demand**: Air writes the first few levels up front. When the learner clicks a
+  link to an explanation that doesn't exist yet, the plugin asks Air to generate it and stores the
+  result, so each one is generated only once.
 
-- Using JetBrains Marketplace:
+## How Air uses it
 
-  Go to [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID) and install it by clicking the <kbd>Install to ...</kbd> button in case your IDE is running.
+Air describes an explanation as a small JSON tree. Every node is written once and referred to by
+id:
 
-  You can also download the [latest release](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID/versions) from JetBrains Marketplace and install it manually using
-  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
+```json
+{
+  "file": "src/Main.java",
+  "root": "main",
+  "nodes": {
+    "main":  { "range": "3-13", "text": "The program's entry point. It [loops five times](#loop)." },
+    "loop":  { "range": "8-12", "text": "Counts i from 1 to 5, [printing it](#print) each time." },
+    "print": { "range": "11",   "text": "Prints i using [string concatenation](#concat)." }
+  }
+}
+```
 
-- Manually:
+Here `#concat` is not defined, so clicking it asks Air to generate it.
 
-  Download the [latest release](https://github.com/james-g7/hacktheburghxiii/releases/latest) and install it manually using
-  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
+From Java/Kotlin, the agent talks to the project's `ExplanationStore`:
 
+```java
+ExplanationStore store = ExplanationStore.getInstance(project);
+
+// Load a tree and show its root.
+String root = store.loadJson(json);   // or store.loadFile(".explanations/x.json")
+store.show(root);
+
+// Generate missing nodes when the learner clicks a link to them.
+store.setProvider((project, request) -> askAir(request));   // returns CompletableFuture<ExplanationNode>
+```
+
+The full format, range syntax and API are documented in [docs/EXPLANATIONS.md](docs/EXPLANATIONS.md).
+There is an example tree in [docs/examples/test_java.json](docs/examples/test_java.json).
+
+## Trying it in the IDE
+
+The plugin adds three actions under **Tools**:
+
+| Action | What it does |
+|---|---|
+| **Show Explanation Tree** | Loads an explanation JSON file (default `.explanations/explanation.json`) and shows its root. |
+| **Highlight with Explanation** | Prompts for a file and range, then for explanation text, and shows it above the highlight. |
+| **Highlight** | Prompts for a file and range and highlights it. |
+
+These let you try the plugin by hand. In normal use, Air drives the plugin through the API above.
+
+## Building from source
+
+Requirements: a JDK matching the toolchain in `build.gradle.kts` (Gradle's toolchain resolver can
+download one for you). The plugin targets IntelliJ Platform 2026.2.
+
+```bash
+./gradlew runIde        # start a sandbox IDE with the plugin installed
+./gradlew buildPlugin   # build the installable zip into build/distributions/
+./gradlew test          # run the tests
+```
+
+In IntelliJ IDEA you can use the bundled **Run Plugin**, **Run Tests** and **Run Verifications**
+run configurations instead.
+
+To install the zip you built, go to <kbd>Settings</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> >
+<kbd>Install Plugin from Disk...</kbd> and choose the file in `build/distributions/`.
+
+## Project layout
+
+```
+src/main/java/
+  explain/   ExplanationStore, ExplanationNode, ExplanationProvider, ExplanationRequest, CodeRange
+  actions/   The Tools menu actions
+  util/      HighlightUtil: editor highlights, explanation boxes and link handling
+docs/        Explanation format and examples
+```
+
+## Authors
+
+- James Gaskin ([@james-g7](https://github.com/james-g7))
+- Noah Barret ([@NoahB-07](https://github.com/NoahB-07))
+
+Made for HackTheBurgh XIII (2026), JetBrains "Help the Developer" challenge.
 
 ---
-Plugin based on the [IntelliJ Platform Plugin Template][template].
-
-[template]: https://github.com/JetBrains/intellij-platform-plugin-template
-[docs:plugin-description]: https://plugins.jetbrains.com/docs/intellij/plugin-user-experience.html#plugin-description-and-presentation
+Plugin scaffold based on the [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template).
