@@ -42,6 +42,19 @@
                 description="Remove all explanation highlights and boxes">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
+        <action id="myplugin.WalkThroughFunction"
+                class="actions.WalkThroughFunctionAction"
+                text="Walk Through Function…"
+                description="Ask the AI for a step-by-step walkthrough of the function at the caret">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+        <action id="myplugin.ShowWalkthrough"
+                class="actions.ShowWalkthroughAction"
+                text="Show Walkthrough"
+                description="Play a walkthrough from a JSON file">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
     </actions>
 
 </idea-plugin>

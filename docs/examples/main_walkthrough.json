@@ -1,0 +1,72 @@
+{
+  "title": "Running main()",
+  "file": "Main.java",
+  "delay": 2000,
+  "steps": [
+    {
+      "line": 3,
+      "kind": "call",
+      "title": "The program starts",
+      "note": "Java runs `main()` first. It takes no inputs.",
+      "stack": ["main()"]
+    },
+    {
+      "line": 6,
+      "title": "Printing a greeting",
+      "note": "`IO.println` writes a line to the console. Look at **Output** below.",
+      "output": "Hello and welcome!\n"
+    },
+    {
+      "line": 8,
+      "title": "The loop starts",
+      "note": "`int i = 1` creates `i` with the value **1**. Then the loop checks `1 <= 5`. That's true, so it runs the body.",
+      "vars": { "i": "1" },
+      "substitute": ["i"]
+    },
+    {
+      "line": 11,
+      "title": "First pass",
+      "note": "`\"i = \" + i` joins the text and the number, giving `\"i = 1\"`.",
+      "vars": { "i": "1" },
+      "substitute": ["i"],
+      "highlight": ["11:20-11:29"],
+      "output": "i = 1\n",
+      "pause": true
+    },
+    {
+      "line": 8,
+      "title": "Back to the top",
+      "note": "`i++` adds one, so `i` is now **2**. `2 <= 5` is still true, so the loop goes round again.",
+      "vars": { "i": "2" },
+      "substitute": ["i"]
+    },
+    {
+      "line": 11,
+      "title": "Second pass",
+      "vars": { "i": "2" },
+      "substitute": ["i"],
+      "output": "i = 2\n"
+    },
+    {
+      "line": "8-12",
+      "title": "Three more passes",
+      "note": "The same thing happens for `i` = 3, 4 and 5.",
+      "vars": { "i": "5" },
+      "output": "i = 3\ni = 4\ni = 5\n"
+    },
+    {
+      "line": 8,
+      "title": "The loop ends",
+      "note": "`i++` makes `i` **6**. `6 <= 5` is **false**, so the loop stops.",
+      "vars": { "i": "6" },
+      "substitute": ["i"],
+      "pause": true
+    },
+    {
+      "line": 13,
+      "kind": "return",
+      "title": "Done",
+      "note": "`main()` reaches its closing brace and the program ends. `i` only existed inside the loop, so it's gone."
+    }
+  ]
+}
