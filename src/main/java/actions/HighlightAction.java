@@ -45,6 +45,18 @@ public class HighlightAction extends AnAction {
     Integer endColumn = promptForInt(project, "Enter end column:", "1");
     if (endColumn == null) return;
 
+    highlight(project, path, startLine, startColumn, endLine, endColumn);
+  }
+
+  /**
+   * Called once the user has entered a valid file path and range. Subclasses can override this to
+   * collect more input before highlighting.
+   */
+  protected void highlight(
+      Project project, String path,
+      int startLine, int startColumn,
+      int endLine, int endColumn
+  ) {
     HighlightUtil.highlightRange(project, path, startLine, startColumn, endLine, endColumn);
   }
 

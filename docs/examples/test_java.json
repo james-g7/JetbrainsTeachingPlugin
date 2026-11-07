@@ -1,0 +1,11 @@
+{
+  "file": "Main.java",
+  "root": "main",
+  "nodes": {
+    "main":  { "range": "3-13", "text": "The program's entry point. It [prints a greeting](#greet), then [loops five times](#loop)." },
+    "greet": { "range": "6", "text": "Prints a welcome message built from [this string literal](6:30-6:49)." },
+    "loop":  { "range": "8-12", "text": "Counts i from 1 to 5. Each pass [prints the counter](#print)." },
+    "print": { "range": "11", "text": "Prints i joined to text with [string concatenation](#concat). Test data is in [temp.txt](#data)." },
+    "data":  { "file": "temp.txt", "range": "1-3", "text": "Junk test data in another file. Back to [the loop](#loop)." }
+  }
+}

@@ -24,6 +24,18 @@
                 description="Highlight a range of code">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
+        <action id="myplugin.ExplainHighlight"
+                class="actions.ExplainHighlightAction"
+                text="Highlight with Explanation"
+                description="Highlight a range of code and show an explanation above it">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+        <action id="myplugin.ShowExplanation"
+                class="actions.ShowExplanationAction"
+                text="Show Explanation Tree"
+                description="Load an explanation tree from JSON and show its root">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
     </actions>
 
 </idea-plugin>
