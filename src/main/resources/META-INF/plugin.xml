@@ -36,6 +36,12 @@
                 description="Load an explanation tree from JSON and show its root">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
+        <action id="myplugin.ClearExplanations"
+                class="actions.ClearExplanationsAction"
+                text="Clear Explanations"
+                description="Remove all explanation highlights and boxes">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
     </actions>
 
 </idea-plugin>

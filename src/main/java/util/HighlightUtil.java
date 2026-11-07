@@ -1,24 +1,21 @@
 package util;
 
-import com.intellij.ide.ui.UISettings;
+import com.intellij.ide.BrowserUtil;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
-import com.intellij.openapi.editor.EditorCustomElementRenderer;
 import com.intellij.openapi.editor.Inlay;
 import com.intellij.openapi.editor.LogicalPosition;
+import com.intellij.openapi.editor.RangeMarker;
 import com.intellij.openapi.editor.ScrollType;
-import com.intellij.openapi.editor.colors.EditorFontType;
-import com.intellij.openapi.editor.event.EditorMouseEvent;
-import com.intellij.openapi.editor.event.EditorMouseListener;
-import com.intellij.openapi.editor.event.EditorMouseMotionListener;
+import com.intellij.openapi.editor.colors.EditorColorsScheme;
 import com.intellij.openapi.editor.ex.EditorEx;
+import com.intellij.openapi.editor.impl.EditorEmbeddedComponentManager;
 import com.intellij.openapi.editor.markup.CustomHighlighterOrder;
 import com.intellij.openapi.editor.markup.CustomHighlighterRenderer;
 import com.intellij.openapi.editor.markup.HighlighterLayer;
 import com.intellij.openapi.editor.markup.HighlighterTargetArea;
 import com.intellij.openapi.editor.markup.RangeHighlighter;
-import com.intellij.openapi.editor.markup.TextAttributes;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.project.Project;
@@ -29,36 +26,40 @@ import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.StatusBar;
 import com.intellij.openapi.wm.WindowManager;
+import com.intellij.ui.ColorUtil;
 import com.intellij.ui.JBColor;
+import com.intellij.ui.scale.JBUIScale;
+import com.intellij.util.ui.JBUI;
 import explain.CodeRange;
+import explain.ColorSpec;
 import explain.ExplanationNode;
 import explain.ExplanationRequest;
 import explain.ExplanationStore;
+import explain.HighlightMode;
+import explain.NodeStyle;
+import explain.Theme;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.awt.BasicStroke;
 import java.awt.Color;
-import java.awt.Cursor;
-import java.awt.Font;
-import java.awt.FontMetrics;
 import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.Point;
-import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.function.Consumer;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Highlights code with an optional explanation box above it. Explanation links to {@code #id}
  * show nodes from the {@link ExplanationStore}, which can link on further.
  *
- * <p>Each step of the chain is a "level": level 0 is the original highlight, and clicking a link
- * in level N's box shows level N+1, replacing whatever was at N+1 and deeper. Levels are tracked
- * per project, so a chain can span several files.
+ * <p>Each step of the chain is a "level": level 0 is the first node shown, and following a link in
+ * level N's box shows level N+1, replacing whatever was at N+1 and deeper. "Next"/"Back" in a
+ * guided tour replace the current level. Levels are tracked per project, so a chain can span files.
  */
 public class HighlightUtil {
   private static final String TITLE = "Highlight Range";
@@ -66,35 +67,8 @@ public class HighlightUtil {
   /** The levels currently shown in a project, indexed by depth. Only touched on the EDT. */
   private static final Key<List<Level>> LEVELS = Key.create("hacktheburghxiii.levels");
 
-  // Colours per depth, cycling when the chain is deeper than the palette.
-  private static final Color[] BLOCK_COLORS = {
-      new JBColor(Color.YELLOW, new Color(0x6B5B00)),
-      new JBColor(new Color(0xBFDBFE), new Color(0x1E3A5F)),
-      new JBColor(new Color(0xBBF7D0), new Color(0x1F4D33)),
-      new JBColor(new Color(0xFBCFE8), new Color(0x5B2142)),
-      new JBColor(new Color(0xFED7AA), new Color(0x5C3A1A)),
-  };
-  private static final Color[] NOTE_BACKGROUNDS = {
-      new JBColor(new Color(0xFFF8D6), new Color(0x3D3820)),
-      new JBColor(new Color(0xEFF6FF), new Color(0x1C2A3D)),
-      new JBColor(new Color(0xF0FDF4), new Color(0x1A3326)),
-      new JBColor(new Color(0xFDF2F8), new Color(0x3A1B2C)),
-      new JBColor(new Color(0xFFF7ED), new Color(0x3A2A1A)),
-  };
-  private static final Color[] NOTE_BORDERS = {
-      new JBColor(new Color(0xD4B106), new Color(0x8C7A1E)),
-      new JBColor(new Color(0x3B82F6), new Color(0x4A7BC8)),
-      new JBColor(new Color(0x22C55E), new Color(0x3F9E66)),
-      new JBColor(new Color(0xEC4899), new Color(0xB84A86)),
-      new JBColor(new Color(0xF97316), new Color(0xC27032)),
-  };
-  private static final Color NOTE_TEXT = new JBColor(new Color(0x1F2937), new Color(0xE5E7EB));
-  private static final Color LINK_TEXT = new JBColor(new Color(0x1D4ED8), new Color(0x8AB4F8));
+  private static final Color LINK_TEXT = JBUI.CurrentTheme.Link.Foreground.ENABLED;
   private static final Color DEAD_LINK_TEXT = new JBColor(new Color(0x9CA3AF), new Color(0x6B7280));
-
-  private static Color byDepth(Color[] palette, int depth) {
-    return palette[depth % palette.length];
-  }
 
   public static void highlightRange(
       Project project, String path,
@@ -105,11 +79,8 @@ public class HighlightUtil {
   }
 
   /**
-   * Highlights the range and, when {@code explanation} is non-blank, shows it in a box directly
-   * above the highlighted block. Replaces anything previously highlighted by this class.
-   *
-   * <p>The explanation may contain links: {@code [label](#id)} shows a node from the project's
-   * {@link ExplanationStore}, and {@code [label](12-15)} highlights a range (see {@link CodeRange#parse}).
+   * Highlights the range and, when {@code explanation} (Markdown) is non-blank, shows it in a box
+   * directly above the highlighted block. Replaces anything previously shown.
    */
   public static void highlightRange(
       Project project, String path,
@@ -118,9 +89,9 @@ public class HighlightUtil {
       String explanation
   ) {
     String range = startLine + ":" + startColumn + "-" + endLine + ":" + endColumn;
-    ExplanationNode node = new ExplanationNode("highlight", null, range, explanation);
+    ExplanationNode node = ExplanationNode.of("highlight", range, explanation);
     ExplanationStore.getInstance(project).nextNavigation();
-    showLevel(project, path, 0, node.codeRange(), node);
+    showLevel(project, path, 0, node.codeRange(), node, null);
   }
 
   /**
@@ -129,6 +100,12 @@ public class HighlightUtil {
    * {@code fallbackPath} (absolute; the file of the node that linked here).
    */
   public static void showNode(Project project, ExplanationNode node, @Nullable String fallbackPath, int depth) {
+    showNode(project, node, fallbackPath, depth, null);
+  }
+
+  /** As above; {@code source} is the href of the link that opened this level, if any (see {@link Level}). */
+  private static void showNode(Project project, ExplanationNode node, @Nullable String fallbackPath, int depth,
+                               @Nullable String source) {
     ExplanationStore store = ExplanationStore.getInstance(project);
     CodeRange range = node.codeRange();
     String file = range.path() != null ? range.path() : node.file();
@@ -138,57 +115,241 @@ public class HighlightUtil {
           "Explanation '" + node.id() + "' has no file. Set \"file\" on the node or the tree.", TITLE));
       return;
     }
-    showLevel(project, path, depth, range, node);
+    showLevel(project, path, depth, range, node, source);
+  }
+
+  /** Removes every level from every editor. */
+  public static void clearAll(Project project) {
+    ApplicationManager.getApplication().invokeLater(() -> {
+      if (!project.isDisposed()) clearFrom(project, 0);
+    });
   }
 
   /**
    * Shows the level at {@code depth}: replaces it and every deeper level with a highlight of
-   * {@code range} in {@code path}, plus an explanation box when the node has text.
+   * {@code range} in {@code path}, plus an explanation box when the node has content.
    */
-  private static void showLevel(
-      Project project, String path, int depth, CodeRange range, @Nullable ExplanationNode node
-  ) {
+  private static void showLevel(Project project, String path, int depth, CodeRange range,
+                                @Nullable ExplanationNode node, @Nullable String source) {
     withEditor(project, path, editor -> {
-      Block block = computeBlock(project, editor,
-          range.startLine(), range.startColumn(), range.endLine(), range.endColumn());
+      Block block = computeBlock(editor, range, error -> Messages.showErrorDialog(project, error, TITLE));
       if (block == null) return;
 
       List<Level> levels = levels(project);
       if (levels.size() < depth) return; // the level holding the clicked link has been cleared
       clearFrom(project, depth);
 
-      RangeHighlighter highlighter = addBlockHighlighter(editor, block, depth);
-      Inlay<?> inlay = null;
-      if (node != null && !node.text().isBlank()) {
-        inlay = addExplanation(project, path, editor, block, depth, node);
+      ExplanationStore store = ExplanationStore.getInstance(project);
+      Theme theme = store.theme();
+      NodeStyle style = node == null ? NodeStyle.DEFAULT : node.style();
+      Color highlight = highlightColor(node, depth, theme);
+      HighlightMode mode = style.highlightMode() != null ? style.highlightMode() : theme.mode();
+
+      List<PaintedBlock> blocks = new ArrayList<>();
+      blocks.add(addBlock(editor, block, depth, highlight, mode));
+      if (node != null) {
+        // Extra ranges are outlined in the same colour, so they read as "related" rather than "the subject".
+        for (String also : node.also()) {
+          Block extra = computeBlock(editor, CodeRange.parse(also), error -> {});
+          if (extra != null) blocks.add(addBlock(editor, extra, depth, highlight, HighlightMode.OUTLINE));
+        }
       }
-      levels.add(new Level(editor, highlighter, inlay));
+
+      Inlay<?> inlay = null;
+      if (node != null && node.hasBoxContent()) {
+        inlay = addBox(project, path, editor, block, depth, node, boxColors(editor, style, highlight), theme);
+      }
+      levels.add(new Level(editor, node, source, blocks, inlay));
 
       moveTo(editor, block);
+      if (node != null) store.fire(l -> l.nodeShown(node, depth));
     });
   }
 
-  private static @Nullable Inlay<?> addExplanation(
-      Project project, String path, Editor editor, Block block, int depth, ExplanationNode node
+  private static @Nullable Inlay<?> addBox(
+      Project project, String path, Editor editor, Block block, int depth,
+      ExplanationNode node, ExplanationBox.Colors colors, Theme theme
   ) {
-    Inlay<ExplanationRenderer> inlay = editor.getInlayModel().addBlockElement(
-        editor.getDocument().getLineStartOffset(block.firstLine), false, true, 0,
-        new ExplanationRenderer(project, node.text().strip(), block.leftColumn, block.firstLine, depth));
-    if (inlay == null) return null;
+    if (!(editor instanceof EditorEx editorEx)) return null;
+    ExplanationStore store = ExplanationStore.getInstance(project);
+    ExplanationNode previous = store.findPrevious(node.id());
 
-    LinkMouseHandler handler = new LinkMouseHandler(project, path, inlay, depth, node);
-    // Registering with the inlay as parent removes the listeners when the inlay goes away.
-    editor.addEditorMouseListener(handler, inlay);
-    editor.addEditorMouseMotionListener(handler, inlay);
-    Disposer.register(inlay, handler::resetCursor);
+    ExplanationBox.Options options = new ExplanationBox.Options(
+        previous != null,
+        node.next() != null && store.canResolve(node.next()),
+        store.canAnswerQuestions(),
+        theme.maxWidth(),
+        theme.fontSize(),
+        editor.getColorsScheme().getEditorFontName(),
+        href -> isLinkLive(store, href));
+
+    // Indent the box to line up with the highlighted block's left edge.
+    int indent = editor.logicalPositionToXY(new LogicalPosition(block.firstLine, block.leftColumn)).x
+        - editor.logicalPositionToXY(new LogicalPosition(block.firstLine, 0)).x;
+
+    ExplanationBox box = new ExplanationBox(node, colors, options, Math.max(0, indent), new ExplanationBox.Actions() {
+      @Override
+      public void link(String href, String label) {
+        followLink(project, path, depth, node, href, label);
+      }
+
+      @Override
+      public void next() {
+        String next = node.next();
+        if (next == null) return;
+        int navigation = store.nextNavigation();
+        showWhenReady(project, store.resolve(new ExplanationRequest(next, "Next", node, depth)),
+            "the next step", navigation, path, depth, null);
+      }
+
+      @Override
+      public void back() {
+        ExplanationNode back = store.findPrevious(node.id());
+        if (back == null) return;
+        store.nextNavigation();
+        showNode(project, back, path, depth);
+      }
+
+      @Override
+      public void close() {
+        store.nextNavigation();
+        clearFrom(project, depth);
+        store.fire(l -> l.closed(node));
+      }
+
+      @Override
+      public void ask() {
+        String question = Messages.showInputDialog(project, "What would you like to know about this code?",
+            "Ask a Question", Messages.getQuestionIcon());
+        if (question == null || question.isBlank()) return;
+        int navigation = store.nextNavigation();
+        showWhenReady(project, store.ask(node, question.trim()), "your question", navigation, path, depth + 1, null);
+      }
+
+      @Override
+      public void hintRevealed(int index) {
+        store.fire(l -> l.hintRevealed(node, index));
+      }
+
+      @Override
+      public void answerRevealed() {
+        store.fire(l -> l.answerRevealed(node));
+      }
+    });
+
+    Inlay<?> inlay = EditorEmbeddedComponentManager.getInstance().addComponent(editorEx, box,
+        new EditorEmbeddedComponentManager.Properties(EditorEmbeddedComponentManager.ResizePolicy.none(), null,
+            false, true, 0, editor.getDocument().getLineStartOffset(block.firstLine)));
+    box.setInlay(inlay);
     return inlay;
   }
 
-  /** One step of a highlight chain: its block highlight and, optionally, its explanation box. */
-  private record Level(Editor editor, RangeHighlighter highlighter, @Nullable Inlay<?> inlay) {
+  private static boolean isLinkLive(ExplanationStore store, String href) {
+    if (href.startsWith("#")) return href.length() > 1 && store.canResolve(href.substring(1));
+    return isExternal(href) || CodeRange.parse(href) != null;
+  }
+
+  private static boolean isExternal(String href) {
+    return href.startsWith("http://") || href.startsWith("https://") || href.startsWith("mailto:");
+  }
+
+  private static void followLink(Project project, String path, int depth, ExplanationNode from, String href, String label) {
+    if (isExternal(href)) {
+      BrowserUtil.browse(href);
+      return;
+    }
+    ExplanationStore store = ExplanationStore.getInstance(project);
+    store.fire(l -> l.linkClicked(from, href));
+    int navigation = store.nextNavigation();
+
+    // Clicking the link that opened the level below again hides it (and everything deeper).
+    List<Level> levels = levels(project);
+    if (levels.size() > depth + 1 && href.equals(levels.get(depth + 1).source())) {
+      ExplanationNode hidden = levels.get(depth + 1).node();
+      clearFrom(project, depth + 1);
+      if (hidden != null) store.fire(l -> l.closed(hidden));
+      return;
+    }
+
+    if (href.startsWith("#")) {
+      String id = href.substring(1);
+      showWhenReady(project, store.resolve(new ExplanationRequest(id, label, from, depth + 1)),
+          "\"" + label + "\"", navigation, path, depth + 1, href);
+      return;
+    }
+    CodeRange range = CodeRange.parse(href);
+    if (range != null) {
+      String targetPath = range.path() == null ? path : store.resolvePath(range.path());
+      showLevel(project, targetPath, depth + 1, range, null, href);
+    }
+  }
+
+  /** Shows a node once it's available, unless the user has navigated elsewhere in the meantime. */
+  private static void showWhenReady(Project project, CompletableFuture<ExplanationNode> future, String what,
+                                    int navigation, String fallbackPath, int depth, @Nullable String source) {
+    ExplanationStore store = ExplanationStore.getInstance(project);
+    if (!future.isDone()) setStatus(project, "Generating an explanation for " + what + "…");
+    future.whenComplete((node, error) -> ApplicationManager.getApplication().invokeLater(() -> {
+      if (project.isDisposed()) return;
+      setStatus(project, "");
+      if (store.currentNavigation() != navigation) return;
+      if (error != null) {
+        Throwable cause = error instanceof CompletionException && error.getCause() != null ? error.getCause() : error;
+        Messages.showErrorDialog(project, "Could not get an explanation for " + what + ": " + cause.getMessage(), TITLE);
+        return;
+      }
+      showNode(project, node, fallbackPath, depth, source);
+    }));
+  }
+
+  private static void setStatus(Project project, String text) {
+    StatusBar statusBar = WindowManager.getInstance().getStatusBar(project);
+    if (statusBar != null) statusBar.setInfo(text);
+  }
+
+  // ---- Colours ----
+
+  /** Explicit style colour, else node colour shorthand (folded into style), else kind default, else theme palette. */
+  private static Color highlightColor(@Nullable ExplanationNode node, int depth, Theme theme) {
+    if (node != null) {
+      if (node.style().highlight() != null) return node.style().highlight().toColor();
+      if (node.kind().color() != null) return node.kind().color().toColor();
+    }
+    return theme.colorForDepth(depth).toColor();
+  }
+
+  /** Box colours: explicit style overrides, otherwise tints of the highlight colour over the editor background. */
+  private static ExplanationBox.Colors boxColors(Editor editor, NodeStyle style, Color highlight) {
+    EditorColorsScheme scheme = editor.getColorsScheme();
+    Color background = scheme.getDefaultBackground();
+    Color foreground = scheme.getDefaultForeground();
+    Color solid = new Color(highlight.getRGB() & 0xFFFFFF);
+    boolean dark = ColorUtil.isDark(background);
+
+    Color box = resolve(style.background(), ColorUtil.mix(background, solid, dark ? 0.45 : 0.3));
+    Color border = resolve(style.border(), ColorUtil.mix(solid, foreground, dark ? 0.15 : 0.35));
+    Color text = resolve(style.text(), foreground);
+    Color code = ColorUtil.mix(box, foreground, 0.08);
+    return new ExplanationBox.Colors(box, border, text, LINK_TEXT, DEAD_LINK_TEXT, code);
+  }
+
+  private static Color resolve(@Nullable ColorSpec spec, Color fallback) {
+    return spec == null ? fallback : spec.toColor();
+  }
+
+  // ---- Levels ----
+
+  /** One step of a highlight chain: its highlights and, optionally, its explanation box. */
+  /**
+   * One step of a highlight chain. {@code source} is the href of the link (in the level above's
+   * box) that opened it, so clicking that link again can hide it; null if it was opened another
+   * way (the first node, Next/Back, or a question's answer).
+   */
+  private record Level(Editor editor, @Nullable ExplanationNode node, @Nullable String source,
+                       List<PaintedBlock> blocks, @Nullable Inlay<?> inlay) {
     void dispose() {
       if (inlay != null && inlay.isValid()) Disposer.dispose(inlay);
-      if (!editor.isDisposed() && highlighter.isValid()) editor.getMarkupModel().removeHighlighter(highlighter);
+      for (PaintedBlock block : blocks) removeBlock(editor, block);
     }
   }
 
@@ -206,6 +367,8 @@ public class HighlightUtil {
     List<Level> levels = levels(project);
     while (levels.size() > depth) levels.remove(levels.size() - 1).dispose();
   }
+
+  // ---- Editors and blocks ----
 
   /** Opens the file in an editor on the EDT and runs {@code action} with it. */
   private static void withEditor(Project project, String path, Consumer<Editor> action) {
@@ -231,14 +394,13 @@ public class HighlightUtil {
   private record Block(int firstLine, int lastLine, int leftColumn, int rightColumn, int firstOffset) {}
 
   /**
-   * Validates the 1-based range and computes the block covering it, or shows an error and
+   * Validates the 1-based range and computes the block covering it, or reports an error and
    * returns null. The end column is inclusive.
    */
-  private static @Nullable Block computeBlock(
-      Project project, Editor editor,
-      int startLine, int startColumn,
-      int endLine, int endColumn
-  ) {
+  private static @Nullable Block computeBlock(Editor editor, @Nullable CodeRange range, Consumer<String> onError) {
+    if (range == null) return null;
+    int startLine = range.startLine(), startColumn = range.startColumn();
+    int endLine = range.endLine(), endColumn = range.endColumn();
     Document document = editor.getDocument();
     CharSequence text = document.getCharsSequence();
     int lineCount = document.getLineCount();
@@ -255,7 +417,7 @@ public class HighlightUtil {
       error = "End position must not be before start position.";
     }
     if (error != null) {
-      Messages.showErrorDialog(project, error, TITLE);
+      onError.accept(error);
       return null;
     }
 
@@ -284,21 +446,50 @@ public class HighlightUtil {
     }
 
     if (firstOffset < 0) {
-      Messages.showErrorDialog(project, "The selected range contains only whitespace.", TITLE);
+      onError.accept("The selected range contains only whitespace.");
       return null;
     }
     return new Block(firstLine, lastLine, leftColumn, rightColumn, firstOffset);
   }
 
-  private static RangeHighlighter addBlockHighlighter(Editor editor, Block block, int depth) {
+  /**
+   * Adds a block to the editor's {@link BlockPainter}. The painter draws all blocks in depth order,
+   * so a deeper level is always on top: separate highlighters starting on the same line are
+   * painted in no guaranteed order, which could hide a nested highlight under its parent's.
+   */
+  private static PaintedBlock addBlock(Editor editor, Block block, int depth, Color color, HighlightMode mode) {
     Document document = editor.getDocument();
-    // One highlighter spanning the block's lines; the renderer paints the rectangle, which can
-    // extend past the end of shorter lines and across blank ones. Deeper levels paint on top.
-    RangeHighlighter highlighter = editor.getMarkupModel().addRangeHighlighter(
-        document.getLineStartOffset(block.firstLine), document.getLineEndOffset(block.lastLine),
-        HighlighterLayer.SELECTION - 100 + Math.min(depth, 99), null, HighlighterTargetArea.LINES_IN_RANGE);
-    highlighter.setCustomRenderer(new BlockRenderer(block.leftColumn, block.rightColumn, byDepth(BLOCK_COLORS, depth)));
-    return highlighter;
+    BlockPainter painter = editor.getUserData(PAINTER);
+    if (painter == null || !painter.highlighter.isValid()) {
+      // One highlighter over the whole document, greedy so it keeps covering text added at either end.
+      RangeHighlighter highlighter = editor.getMarkupModel().addRangeHighlighter(
+          0, document.getTextLength(), HighlighterLayer.SELECTION - 1, null, HighlighterTargetArea.LINES_IN_RANGE);
+      highlighter.setGreedyToLeft(true);
+      highlighter.setGreedyToRight(true);
+      painter = new BlockPainter(highlighter);
+      highlighter.setCustomRenderer(painter);
+      editor.putUserData(PAINTER, painter);
+    }
+    // The marker tracks the block's lines through edits.
+    RangeMarker marker = document.createRangeMarker(
+        document.getLineStartOffset(block.firstLine), document.getLineEndOffset(block.lastLine));
+    PaintedBlock painted = new PaintedBlock(marker, block.leftColumn, block.rightColumn, color, mode, depth);
+    painter.blocks.add(painted);
+    editor.getContentComponent().repaint();
+    return painted;
+  }
+
+  private static void removeBlock(Editor editor, PaintedBlock block) {
+    block.marker().dispose();
+    if (editor.isDisposed()) return;
+    BlockPainter painter = editor.getUserData(PAINTER);
+    if (painter == null) return;
+    painter.blocks.remove(block);
+    if (painter.blocks.isEmpty()) {
+      if (painter.highlighter.isValid()) editor.getMarkupModel().removeHighlighter(painter.highlighter);
+      editor.putUserData(PAINTER, null);
+    }
+    editor.getContentComponent().repaint();
   }
 
   private static void moveTo(Editor editor, Block block) {
@@ -306,325 +497,64 @@ public class HighlightUtil {
     editor.getScrollingModel().scrollTo(editor.offsetToLogicalPosition(block.firstOffset), ScrollType.CENTER);
   }
 
-  /** Paints a filled rectangle from leftColumn to rightColumn over every line of the highlighter. */
-  private static final class BlockRenderer implements CustomHighlighterRenderer {
-    private final int leftColumn;
-    private final int rightColumn;
-    private final Color color;
+  /** A highlighted block: lines tracked by {@code marker}, between two logical columns. */
+  private record PaintedBlock(RangeMarker marker, int leftColumn, int rightColumn, Color color, HighlightMode mode, int depth) {}
 
-    BlockRenderer(int leftColumn, int rightColumn, Color color) {
-      this.leftColumn = leftColumn;
-      this.rightColumn = rightColumn;
-      this.color = color;
+  private static final Key<BlockPainter> PAINTER = Key.create("hacktheburghxiii.blockPainter");
+
+  /** Paints every block in one editor, shallowest first, so deeper levels end up on top. */
+  private static final class BlockPainter implements CustomHighlighterRenderer {
+    final RangeHighlighter highlighter;
+    final List<PaintedBlock> blocks = new ArrayList<>();
+
+    BlockPainter(RangeHighlighter highlighter) {
+      this.highlighter = highlighter;
     }
 
     @Override
     public void paint(@NotNull Editor editor, @NotNull RangeHighlighter highlighter, @NotNull Graphics g) {
-      if (!highlighter.isValid()) return;
+      List<PaintedBlock> ordered = new ArrayList<>(blocks);
+      ordered.sort(java.util.Comparator.comparingInt(PaintedBlock::depth)); // stable: same-depth keeps insertion order
+      for (PaintedBlock block : ordered) paintBlock(editor, block, g);
+    }
+
+    private static void paintBlock(Editor editor, PaintedBlock block, Graphics g) {
+      if (!block.marker().isValid()) return;
       Document document = editor.getDocument();
       // Line numbers are recomputed on each paint so the block follows edits above it.
-      int firstLine = document.getLineNumber(highlighter.getStartOffset());
-      int lastLine = document.getLineNumber(highlighter.getEndOffset());
+      int firstLine = document.getLineNumber(block.marker().getStartOffset());
+      int lastLine = document.getLineNumber(block.marker().getEndOffset());
 
-      Point topLeft = editor.logicalPositionToXY(new LogicalPosition(firstLine, leftColumn));
-      Point bottomRight = editor.logicalPositionToXY(new LogicalPosition(lastLine, rightColumn));
-      int bottom = bottomRight.y + editor.getLineHeight();
+      Point topLeft = editor.logicalPositionToXY(new LogicalPosition(firstLine, block.leftColumn()));
+      Point bottomRight = editor.logicalPositionToXY(new LogicalPosition(lastLine, block.rightColumn()));
+      int x = topLeft.x, y = topLeft.y;
+      int width = bottomRight.x - topLeft.x;
+      int height = bottomRight.y + editor.getLineHeight() - topLeft.y;
 
-      g.setColor(color);
-      g.fillRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottom - topLeft.y);
+      Graphics2D g2 = (Graphics2D) g.create();
+      try {
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setColor(block.color());
+        switch (block.mode()) {
+          case FILL -> g2.fillRect(x, y, width, height);
+          case OUTLINE -> {
+            int pad = JBUIScale.scale(2);
+            g2.setStroke(new BasicStroke(JBUIScale.scale(2f)));
+            g2.drawRoundRect(x - pad, y, width + 2 * pad, height - 1, JBUIScale.scale(6), JBUIScale.scale(6));
+          }
+          case BAR -> {
+            int barWidth = JBUIScale.scale(3);
+            g2.fillRect(Math.max(0, x - JBUIScale.scale(6)), y, barWidth, height);
+          }
+        }
+      } finally {
+        g2.dispose();
+      }
     }
 
     @Override
     public @NotNull CustomHighlighterOrder getOrder() {
       return CustomHighlighterOrder.AFTER_BACKGROUND; // draw beneath the text
-    }
-  }
-
-  /**
-   * Where a clicked link goes: a stored (or to-be-generated) node, or a plain range with no
-   * explanation. Exactly one of {@code nodeId} and {@code range} is set.
-   */
-  private record Link(String label, @Nullable String nodeId, @Nullable CodeRange range) {}
-
-  /** A piece of explanation text laid out on one line; x is relative to the start of the text area. */
-  private record Run(String text, @Nullable Link link, int x, int width) {}
-
-  /** Paints an explanation as a bordered note box, aligned with the left edge of the highlighted block. */
-  private static final class ExplanationRenderer implements EditorCustomElementRenderer {
-    private static final int PADDING = 6;
-    private static final int MARGIN = 3; // vertical space between the box and the surrounding lines
-    private static final int MAX_TEXT_WIDTH = 600;
-    private static final Pattern LINK = Pattern.compile("\\[([^\\]]+)]\\(([^)]+)\\)");
-
-    /** One word of the explanation, with the link it belongs to and whether a space precedes it. */
-    private record Token(String text, @Nullable Link link, boolean spaceBefore) {}
-
-    /** Each inner list is one paragraph (a line the user typed). */
-    private final List<List<Token>> paragraphs;
-    private final Project project;
-    private final int leftColumn;
-    private final int initialLine;
-    private final int depth;
-
-    ExplanationRenderer(Project project, String text, int leftColumn, int initialLine, int depth) {
-      this.paragraphs = tokenize(text);
-      this.project = project;
-      this.leftColumn = leftColumn;
-      this.initialLine = initialLine;
-      this.depth = depth;
-    }
-
-    @Override
-    public int calcWidthInPixels(@NotNull Inlay inlay) {
-      // Called while the inlay is still being constructed, when inlay.getOffset() is not yet
-      // valid, so use the line the inlay was created on. The width only affects scrolling.
-      Editor editor = inlay.getEditor();
-      FontMetrics metrics = metrics(editor);
-      int line = Math.min(initialLine, Math.max(0, editor.getDocument().getLineCount() - 1));
-      return boxX(editor, line) + textWidth(layout(metrics)) + 2 * PADDING;
-    }
-
-    @Override
-    public int calcHeightInPixels(@NotNull Inlay inlay) {
-      FontMetrics metrics = metrics(inlay.getEditor());
-      return layout(metrics).size() * metrics.getHeight() + 2 * PADDING + 2 * MARGIN;
-    }
-
-    @Override
-    public void paint(@NotNull Inlay inlay, @NotNull Graphics g, @NotNull Rectangle region, @NotNull TextAttributes attributes) {
-      Editor editor = inlay.getEditor();
-      FontMetrics metrics = metrics(editor);
-      List<List<Run>> lines = layout(metrics);
-
-      int x = currentBoxX(inlay);
-      int y = region.y + MARGIN;
-      int width = textWidth(lines) + 2 * PADDING;
-      int height = region.height - 2 * MARGIN;
-
-      UISettings.setupAntialiasing(g);
-      g.setColor(byDepth(NOTE_BACKGROUNDS, depth));
-      g.fillRoundRect(x, y, width, height, 8, 8);
-      g.setColor(byDepth(NOTE_BORDERS, depth));
-      g.drawRoundRect(x, y, width - 1, height - 1, 8, 8);
-
-      g.setFont(metrics.getFont());
-      int baseline = y + PADDING + metrics.getAscent();
-      for (List<Run> line : lines) {
-        for (Run run : line) {
-          int runX = x + PADDING + run.x();
-          boolean clickable = isClickable(run.link());
-          // A link to a node that isn't stored, with no provider to generate it, is shown dimmed.
-          g.setColor(clickable ? LINK_TEXT : run.link() != null ? DEAD_LINK_TEXT : NOTE_TEXT);
-          g.drawString(run.text(), runX, baseline);
-          if (clickable) g.drawLine(runX, baseline + 1, runX + run.width(), baseline + 1);
-        }
-        baseline += metrics.getHeight();
-      }
-    }
-
-    /** Returns the link under {@code point} (editor content coordinates), or null. */
-    @Nullable Link linkAt(Inlay<?> inlay, Point point) {
-      Rectangle bounds = inlay.getBounds();
-      if (bounds == null || !bounds.contains(point)) return null;
-
-      FontMetrics metrics = metrics(inlay.getEditor());
-      List<List<Run>> lines = layout(metrics);
-      int textTop = bounds.y + MARGIN + PADDING;
-      if (point.y < textTop) return null;
-      int lineIndex = (point.y - textTop) / metrics.getHeight();
-      if (lineIndex >= lines.size()) return null;
-
-      int relX = point.x - (currentBoxX(inlay) + PADDING);
-      for (Run run : lines.get(lineIndex)) {
-        if (isClickable(run.link()) && relX >= run.x() && relX <= run.x() + run.width()) return run.link();
-      }
-      return null;
-    }
-
-    private boolean isClickable(@Nullable Link link) {
-      if (link == null) return false;
-      return link.nodeId() == null || ExplanationStore.getInstance(project).canResolve(link.nodeId());
-    }
-
-    /** X of the block's left edge on the line the inlay is currently attached to. */
-    private int currentBoxX(Inlay<?> inlay) {
-      Editor editor = inlay.getEditor();
-      return boxX(editor, editor.getDocument().getLineNumber(inlay.getOffset()));
-    }
-
-    private int boxX(Editor editor, int line) {
-      return editor.logicalPositionToXY(new LogicalPosition(line, leftColumn)).x;
-    }
-
-    private static FontMetrics metrics(Editor editor) {
-      Font font = editor.getColorsScheme().getFont(EditorFontType.ITALIC);
-      return editor.getContentComponent().getFontMetrics(font);
-    }
-
-    private static int textWidth(List<List<Run>> lines) {
-      int width = 0;
-      for (List<Run> line : lines) {
-        if (!line.isEmpty()) {
-          Run last = line.get(line.size() - 1);
-          width = Math.max(width, last.x() + last.width());
-        }
-      }
-      return width;
-    }
-
-    /**
-     * Splits the text into paragraphs (the user's line breaks) of words. {@code [label](target)}
-     * becomes the label's words tagged with the link, where target is {@code #id} or a range; any
-     * other target is kept as plain text. Node ids are looked up when clicked, not here, so nodes
-     * added to the store later still work.
-     */
-    private static List<List<Token>> tokenize(String text) {
-      List<List<Token>> result = new ArrayList<>();
-      for (String paragraph : text.split("\\R", -1)) {
-        List<Token> tokens = new ArrayList<>();
-        boolean[] pendingSpace = {false};
-        Matcher m = LINK.matcher(paragraph);
-        int pos = 0;
-        while (m.find()) {
-          Link link = parseLink(m.group(1).trim(), m.group(2).trim());
-          if (link == null) continue; // left in the surrounding plain text
-          addWords(tokens, paragraph.substring(pos, m.start()), null, pendingSpace);
-          addWords(tokens, m.group(1), link, pendingSpace);
-          pos = m.end();
-        }
-        addWords(tokens, paragraph.substring(pos), null, pendingSpace);
-        result.add(tokens);
-      }
-      return result;
-    }
-
-    private static @Nullable Link parseLink(String label, String target) {
-      if (target.startsWith("#") && target.length() > 1) return new Link(label, target.substring(1), null);
-      CodeRange range = CodeRange.parse(target);
-      return range == null ? null : new Link(label, null, range);
-    }
-
-    /** Appends the words of {@code text}; pendingSpace carries "whitespace seen" across calls. */
-    private static void addWords(List<Token> tokens, String text, @Nullable Link link, boolean[] pendingSpace) {
-      StringBuilder word = new StringBuilder();
-      for (int i = 0; i <= text.length(); i++) {
-        boolean end = i == text.length();
-        if (end || Character.isWhitespace(text.charAt(i))) {
-          if (!word.isEmpty()) {
-            tokens.add(new Token(word.toString(), link, pendingSpace[0]));
-            word.setLength(0);
-            pendingSpace[0] = false;
-          }
-          if (!end) pendingSpace[0] = true;
-        } else {
-          word.append(text.charAt(i));
-        }
-      }
-    }
-
-    /** Word-wraps the paragraphs to MAX_TEXT_WIDTH, merging adjacent words with the same link into one run. */
-    private List<List<Run>> layout(FontMetrics metrics) {
-      int spaceWidth = metrics.charWidth(' ');
-      List<List<Run>> lines = new ArrayList<>();
-      for (List<Token> paragraph : paragraphs) {
-        List<Run> line = new ArrayList<>();
-        int x = 0;
-        for (Token token : paragraph) {
-          int gap = token.spaceBefore() && x > 0 ? spaceWidth : 0;
-          int width = metrics.stringWidth(token.text());
-          if (x > 0 && x + gap + width > MAX_TEXT_WIDTH) {
-            lines.add(line);
-            line = new ArrayList<>();
-            x = 0;
-            gap = 0;
-          }
-          Run last = line.isEmpty() ? null : line.get(line.size() - 1);
-          if (last != null && last.link() == token.link()) {
-            String merged = last.text() + (gap > 0 ? " " : "") + token.text();
-            Run run = new Run(merged, last.link(), last.x(), metrics.stringWidth(merged));
-            line.set(line.size() - 1, run);
-            x = run.x() + run.width();
-          } else {
-            line.add(new Run(token.text(), token.link(), x + gap, width));
-            x += gap + width;
-          }
-        }
-        lines.add(line);
-      }
-      return lines;
-    }
-  }
-
-  /** Makes links in an explanation clickable, and shows a hand cursor over them. */
-  private static final class LinkMouseHandler implements EditorMouseListener, EditorMouseMotionListener {
-    private final Project project;
-    private final String path;
-    private final Inlay<ExplanationRenderer> inlay;
-    private final int depth;
-    private final ExplanationNode node;
-
-    LinkMouseHandler(Project project, String path, Inlay<ExplanationRenderer> inlay, int depth, ExplanationNode node) {
-      this.project = project;
-      this.path = path;
-      this.inlay = inlay;
-      this.depth = depth;
-      this.node = node;
-    }
-
-    @Override
-    public void mouseClicked(@NotNull EditorMouseEvent event) {
-      Link link = linkAt(event);
-      if (link == null) return;
-      event.consume();
-      ExplanationStore store = ExplanationStore.getInstance(project);
-      int navigation = store.nextNavigation();
-
-      if (link.range() != null) {
-        CodeRange range = link.range();
-        String targetPath = range.path() == null ? path : store.resolvePath(range.path());
-        showLevel(project, targetPath, depth + 1, range, null);
-        return;
-      }
-
-      CompletableFuture<ExplanationNode> future =
-          store.resolve(new ExplanationRequest(link.nodeId(), link.label(), node, depth + 1));
-      if (!future.isDone()) setStatus("Generating explanation for \"" + link.label() + "\"…");
-      future.whenComplete((child, error) -> ApplicationManager.getApplication().invokeLater(() -> {
-        if (project.isDisposed()) return;
-        setStatus("");
-        // Ignore the result if the user has clicked something else since.
-        if (store.currentNavigation() != navigation) return;
-        if (error != null) {
-          Throwable cause = error instanceof CompletionException && error.getCause() != null ? error.getCause() : error;
-          Messages.showErrorDialog(project,
-              "Could not get the explanation for \"" + link.label() + "\": " + cause.getMessage(), TITLE);
-          return;
-        }
-        showNode(project, child, path, depth + 1);
-      }));
-    }
-
-    private void setStatus(String text) {
-      StatusBar statusBar = WindowManager.getInstance().getStatusBar(project);
-      if (statusBar != null) statusBar.setInfo(text);
-    }
-
-    @Override
-    public void mouseMoved(@NotNull EditorMouseEvent event) {
-      setCursor(linkAt(event) != null ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : null);
-    }
-
-    void resetCursor() {
-      setCursor(null);
-    }
-
-    private void setCursor(@Nullable Cursor cursor) {
-      if (inlay.getEditor() instanceof EditorEx editorEx) editorEx.setCustomCursor(this, cursor);
-    }
-
-    private @Nullable Link linkAt(EditorMouseEvent event) {
-      if (!inlay.isValid()) return null;
-      return inlay.getRenderer().linkAt(inlay, event.getMouseEvent().getPoint());
     }
   }
 

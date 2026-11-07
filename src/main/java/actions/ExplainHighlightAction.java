@@ -17,7 +17,7 @@ public class ExplainHighlightAction extends HighlightAction {
   ) {
     String explanation = Messages.showMultilineInputDialog(
         project,
-        "Explain what the highlighted code does.\n"
+        "Explain what the highlighted code does (Markdown is supported).\n"
             + "Link to code with [label](range), where range is 12, 12-15, 12:5-15:20,\n"
             + "or path/relative/to/project@12-15 for another file.\n"
             + "Link to a node in the explanation store with [label](#id).",

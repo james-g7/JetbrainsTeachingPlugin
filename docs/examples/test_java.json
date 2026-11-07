@@ -1,11 +1,65 @@
 {
   "file": "Main.java",
   "root": "main",
+  "theme": {
+    "palette": ["yellow", "blue", "green", "pink"],
+    "maxWidth": 480
+  },
   "nodes": {
-    "main":  { "range": "3-13", "text": "The program's entry point. It [prints a greeting](#greet), then [loops five times](#loop)." },
-    "greet": { "range": "6", "text": "Prints a welcome message built from [this string literal](6:30-6:49)." },
-    "loop":  { "range": "8-12", "text": "Counts i from 1 to 5. Each pass [prints the counter](#print)." },
-    "print": { "range": "11", "text": "Prints i joined to text with [string concatenation](#concat). Test data is in [temp.txt](#data)." },
-    "data":  { "file": "temp.txt", "range": "1-3", "text": "Junk test data in another file. Back to [the loop](#loop)." }
+    "main": {
+      "range": "3-13",
+      "title": "The main method",
+      "kind": "info",
+      "text": "This is the program's **entry point**. It:\n\n1. [prints a greeting](#greet)\n2. [loops five times](#loop)\n\nTake the [guided tour](#tour1) for a step-by-step walkthrough.",
+      "style": { "highlightStyle": "bar" }
+    },
+    "greet": {
+      "range": "6",
+      "title": "Printing a greeting",
+      "text": "`IO.println` prints a line to the console. The text is [this string literal](6:30-6:49).",
+      "color": { "light": "#FDE68A", "dark": "#5C4A0B" }
+    },
+    "loop": {
+      "range": "8-12",
+      "title": "A `for` loop",
+      "kind": "tip",
+      "text": "Counts `i` from 1 to 5. The highlighted outline shows where `i` is used.\n\nEach pass [prints the counter](#print).",
+      "also": ["11"]
+    },
+    "print": {
+      "range": "11",
+      "kind": "question",
+      "title": "Check your understanding",
+      "text": "What does this line print on the **third** pass of the loop?\n\nIt uses [string concatenation](#concat). The test data is in [temp.txt](#data).",
+      "hints": ["`i` starts at 1 and goes up by one each pass.", "`\"i = \" + i` joins the text and the number."],
+      "answer": "`i = 3`"
+    },
+    "data": {
+      "file": "temp.txt",
+      "range": "1-3",
+      "kind": "warning",
+      "text": "Junk test data in another file. Back to [the loop](#loop).",
+      "style": { "highlightStyle": "outline", "border": "#F97316" }
+    },
+    "tour1": {
+      "range": "3",
+      "title": "Tour 1/3: the signature",
+      "kind": "example",
+      "text": "`void main()` declares a method with no return value. Java runs it first.",
+      "next": "tour2"
+    },
+    "tour2": {
+      "range": "6",
+      "title": "Tour 2/3: output",
+      "kind": "example",
+      "text": "Prints `Hello and welcome!`.",
+      "next": "tour3"
+    },
+    "tour3": {
+      "range": "8-12",
+      "title": "Tour 3/3: the loop",
+      "kind": "example",
+      "text": "Prints `i = 1` to `i = 5`. That's the end of the tour!"
+    }
   }
 }
