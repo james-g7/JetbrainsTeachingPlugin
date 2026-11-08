@@ -91,6 +91,7 @@ class LearningToolset : McpToolset {
     Shape: {"file": "src/Main.java", "root": "main", "nodes": {"main": {"range": "3-13", "text": "It [loops](#loop)."}, "loop": {"range": "8-12", "text": "..."}}}
     Only "nodes" and each node's "range" are required. Links: [label](#id) opens node id; [label](12-15) highlights code.
     Write the root plus up to 3 levels of links. Links to ids you don't define are generated on demand when clicked, if a provider is set.
+    Every opened node automatically gets a "Back to <parent title>" link, so don't write your own back links; do give nodes a title.
     Optional node fields include title, kind (note, info, tip, warning, question, example), color, also, hints, answer and next.
     Call learning_get_format_reference with "explanations" for every field.
 

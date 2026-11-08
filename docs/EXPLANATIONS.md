@@ -70,6 +70,9 @@ Clicking a link again while what it opened is still showing hides it, and everyt
 Every box opened from another box (by a link, or as the answer to a question) gets an
 "↑ Back to <parent title>" link automatically. It closes that box and everything below it and
 scrolls back to the parent, switching files if needed, so a learner never hits a dead end.
+Don't write your own "go back" links: `[back](#parent)` opens a second copy of the parent one
+level deeper rather than returning to it. Give nodes a `title`, since the back link shows it
+(without one it says "↑ Back up").
 
 ## Patterns for teaching
 
