@@ -3,6 +3,7 @@ import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
 plugins {
     id("java")
+    id("org.jetbrains.kotlin.jvm")
     id("org.jetbrains.intellij.platform")
     id("org.jetbrains.changelog")
 }
@@ -17,13 +18,14 @@ dependencies {
     intellijPlatform {
         intellijIdea(providers.gradleProperty("platformVersion"))
         testFramework(TestFrameworkType.Platform)
+
+        // The IDE's built-in MCP server, which serves the tools in mcp/LearningToolset.kt.
+        bundledPlugin("com.intellij.mcpServer")
     }
 }
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
-    }
+kotlin {
+    jvmToolchain(25)
 }
 
 // Configure IntelliJ Platform Gradle Plugin - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-extension.html
@@ -69,6 +71,19 @@ changelog {
 }
 
 tasks {
+    // Sources contain non-ASCII characters (e.g. "← Back"); don't depend on the OS default encoding.
+    withType<JavaCompile> {
+        options.encoding = "UTF-8"
+    }
+
+    // Bundle the format references so the MCP tool learning_get_format_reference can serve them.
+    processResources {
+        from("docs") {
+            include("EXPLANATIONS.md", "WALKTHROUGH.md")
+            into("docs")
+        }
+    }
+
     publishPlugin {
         dependsOn(patchChangelog)
     }

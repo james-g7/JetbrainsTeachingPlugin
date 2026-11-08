@@ -20,6 +20,8 @@
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
+    <!-- Adds the learning_* tools to the IDE's MCP server when it is installed. -->
+    <depends optional="true" config-file="mcp.xml">com.intellij.mcpServer</depends>
 
     <actions>
         <group id="HtbLearning.ToolsGroup" text="Learning Agent" popup="true">

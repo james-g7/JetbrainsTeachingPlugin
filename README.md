@@ -62,6 +62,24 @@ store.setProvider((project, request) -> askAir(request));   // returns Completab
 The full format, range syntax and API are documented in [docs/EXPLANATIONS.md](docs/EXPLANATIONS.md).
 There is an example tree in [docs/examples/test_java.json](docs/examples/test_java.json).
 
+## Using it over MCP
+
+The plugin adds these tools to the IDE's built-in MCP server (**Settings > Tools > MCP Server**),
+so any MCP client can drive it. Each tool's description tells the client's model how to call it.
+
+| Tool | What it does |
+|---|---|
+| `learning_get_format_reference` | Returns the full explanation or walkthrough format docs. |
+| `learning_highlight_code` | Highlights a range, optionally with a Markdown explanation above it. |
+| `learning_show_explanation_tree` | Loads an explanation tree (JSON) and shows its root. |
+| `learning_show_explanation_node` | Shows an already loaded node. |
+| `learning_clear_explanations` | Removes all highlights and boxes. |
+| `learning_play_walkthrough` | Plays a walkthrough (JSON). |
+| `learning_control_walkthrough` | Next, previous, go to a step, play/pause or stop. |
+
+Invalid JSON comes back as a tool error naming the node or step at fault, so the client can fix it
+and retry. The tools are in [LearningToolset.kt](src/main/kotlin/com/github/jamesg7/hacktheburghxiii/mcp/LearningToolset.kt).
+
 ## Trying it in the IDE
 
 The plugin adds a **Tools → Learning Agent** menu:
