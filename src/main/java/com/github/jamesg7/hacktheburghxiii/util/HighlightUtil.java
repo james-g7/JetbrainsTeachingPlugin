@@ -16,6 +16,7 @@ import com.intellij.openapi.editor.markup.CustomHighlighterRenderer;
 import com.intellij.openapi.editor.markup.HighlighterLayer;
 import com.intellij.openapi.editor.markup.HighlighterTargetArea;
 import com.intellij.openapi.editor.markup.RangeHighlighter;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.project.Project;
@@ -173,11 +174,16 @@ public class HighlightUtil {
     if (!(editor instanceof EditorEx editorEx)) return null;
     ExplanationStore store = ExplanationStore.getInstance(project);
     ExplanationNode previous = store.findPrevious(node.id());
+    // Every box opened from another box gets a link back to it, so the learner is never stranded.
+    // The levels above this one are already in place (this level is added after the box is built).
+    List<Level> levels = levels(project);
+    Level parent = depth > 0 && levels.size() >= depth ? levels.get(depth - 1) : null;
 
     ExplanationBox.Options options = new ExplanationBox.Options(
         previous != null,
         node.next() != null && store.canResolve(node.next()),
         store.canAnswerQuestions(),
+        parent == null ? null : upLabel(parent.node()),
         theme.maxWidth(),
         theme.fontSize(),
         editor.getColorsScheme().getEditorFontName(),
@@ -208,6 +214,17 @@ public class HighlightUtil {
         if (back == null) return;
         store.nextNavigation();
         showNode(project, back, path, depth);
+      }
+
+      @Override
+      public void up() {
+        List<Level> current = levels(project);
+        if (depth == 0 || current.size() < depth) return; // the parent has been closed already
+        Level target = current.get(depth - 1);
+        store.nextNavigation();
+        clearFrom(project, depth);
+        store.fire(l -> l.closed(node));
+        reveal(project, target);
       }
 
       @Override
@@ -242,6 +259,27 @@ public class HighlightUtil {
             false, true, 0, editor.getDocument().getLineStartOffset(block.firstLine)));
     box.setInlay(inlay);
     return inlay;
+  }
+
+  /** The text of the link back to a parent box, e.g. "↑ Back to The main method". */
+  private static String upLabel(@Nullable ExplanationNode parent) {
+    String title = parent == null ? null : parent.title();
+    if (title == null) return "↑ Back up";
+    if (title.length() > 40) title = title.substring(0, 39).trim() + "…";
+    return "↑ Back to " + title;
+  }
+
+  /** Brings a shown level back into view: opens its editor's file and scrolls to its block. */
+  private static void reveal(Project project, Level level) {
+    Editor editor = level.editor();
+    if (editor.isDisposed() || level.blocks().isEmpty()) return;
+    RangeMarker marker = level.blocks().get(0).marker();
+    if (!marker.isValid()) return;
+    VirtualFile file = FileDocumentManager.getInstance().getFile(editor.getDocument());
+    if (file != null) FileEditorManager.getInstance(project).openFile(file, true);
+    int offset = marker.getStartOffset();
+    editor.getCaretModel().moveToOffset(offset);
+    editor.getScrollingModel().scrollTo(editor.offsetToLogicalPosition(offset), ScrollType.CENTER);
   }
 
   private static boolean isLinkLive(ExplanationStore store, String href) {
@@ -339,7 +377,6 @@ public class HighlightUtil {
 
   // ---- Levels ----
 
-  /** One step of a highlight chain: its highlights and, optionally, its explanation box. */
   /**
    * One step of a highlight chain. {@code source} is the href of the link (in the level above's
    * box) that opened it, so clicking that link again can hide it; null if it was opened another

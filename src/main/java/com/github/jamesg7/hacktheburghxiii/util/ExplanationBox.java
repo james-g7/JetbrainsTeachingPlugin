@@ -49,6 +49,8 @@ final class ExplanationBox extends JPanel {
     void link(String href, String label);
     void next();
     void back();
+    /** Closes this box and returns to the box whose link opened it. */
+    void up();
     void close();
     void ask();
     void hintRevealed(int index);
@@ -57,9 +59,13 @@ final class ExplanationBox extends JPanel {
 
   record Colors(Color background, Color border, Color text, Color link, Color deadLink, Color code) {}
 
-  /** What the box should offer, decided by the caller from the store's state. */
-  record Options(boolean hasBack, boolean hasNext, boolean canAsk, int maxWidth, @Nullable Integer fontSize,
-                 String codeFontFamily, Predicate<String> isLinkLive) {}
+  /**
+   * What the box should offer, decided by the caller from the store's state. {@code upLabel} is the
+   * text of the link back to the parent box (the one whose link opened this box), or null when this
+   * box has no parent.
+   */
+  record Options(boolean hasBack, boolean hasNext, boolean canAsk, @Nullable String upLabel, int maxWidth,
+                 @Nullable Integer fontSize, String codeFontFamily, Predicate<String> isLinkLive) {}
 
   private static final Pattern ANCHOR = Pattern.compile("<a\\s+href=\"([^\"]*)\"[^>]*>(.*?)</a>", Pattern.DOTALL);
   private static final int ARC = 10;
@@ -198,6 +204,7 @@ final class ExplanationBox extends JPanel {
         refresh();
       }));
     }
+    if (options.upLabel() != null) footer.add(link(options.upLabel(), e -> actions.up()));
     if (options.hasBack()) footer.add(link("← Back", e -> actions.back()));
     if (options.hasNext()) footer.add(link("Next →", e -> actions.next()));
     if (options.canAsk()) footer.add(link("Ask a question…", e -> actions.ask()));
