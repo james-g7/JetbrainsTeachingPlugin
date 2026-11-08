@@ -67,6 +67,10 @@ The highlight colour is chosen in this order: `style.highlight`, then `color`, t
 
 Clicking a link again while what it opened is still showing hides it, and everything below it.
 
+Every box opened from another box (by a link, or as the answer to a question) gets an
+"↑ Back to <parent title>" link automatically. It closes that box and everything below it and
+scrolls back to the parent, switching files if needed, so a learner never hits a dead end.
+
 ## Patterns for teaching
 
 - **Explore:** a root node that links to its parts, and each part links to its details.
