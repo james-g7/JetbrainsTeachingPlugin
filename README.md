@@ -122,5 +122,9 @@ docs/           Explanation and walkthrough formats, with examples
 
 Made for HackTheBurgh XIII (2026), JetBrains "Help the Developer" challenge.
 
+## License
+
+[MIT](LICENSE)
+
 ---
 Plugin scaffold based on the [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template).
